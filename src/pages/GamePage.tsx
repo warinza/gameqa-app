@@ -384,6 +384,13 @@ export default function GamePage() {
 
             <div ref={gameContainer} className="flex-1 bg-slate-950" />
 
+            {/* Miss Warning Indicator */}
+            {missCount > 0 && lockoutTimer === 0 && (
+                <div className="absolute top-24 left-1/2 -translate-x-1/2 px-4 py-2 bg-amber-500/20 backdrop-blur-md rounded-xl border border-amber-500/30 text-amber-400 text-sm font-bold animate-pulse z-50">
+                    ⚠️ Wrong clicks: {missCount} / 3
+                </div>
+            )}
+
             {/* Anti-Spam Lockout Overlay */}
             {lockoutTimer > 0 && (
                 <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center z-[100] animate-fade-in">
