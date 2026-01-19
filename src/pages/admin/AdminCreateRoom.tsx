@@ -54,7 +54,7 @@ export default function AdminCreateRoom() {
         setIsCreating(true)
 
         try {
-            const apiUrl = import.meta.env.VITE_API_URL || ''
+            const apiUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
             const response = await fetch(`${apiUrl}/api/rooms`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
