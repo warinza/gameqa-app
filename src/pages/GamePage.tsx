@@ -47,6 +47,13 @@ export default function GamePage() {
     const pendingImage = useRef<ImageData | null>(null)
     const [foundCount, setFoundCount] = useState(0)
     const [totalPoints, setTotalPoints] = useState(0)
+    const [missCount, setMissCount] = useState(0)
+    const [lockoutTimer, setLockoutTimer] = useState(0)
+    const lockoutRef = useRef(0)
+
+    useEffect(() => {
+        lockoutRef.current = lockoutTimer
+    }, [lockoutTimer])
 
     useEffect(() => {
         const playerInfoStr = sessionStorage.getItem('playerInfo')
@@ -147,6 +154,15 @@ export default function GamePage() {
         return () => clearInterval(interval)
     }, [gameState, currentImageIdx])
 
+    // Lockout countdown timer
+    useEffect(() => {
+        if (lockoutTimer <= 0) return
+        const interval = setInterval(() => {
+            setLockoutTimer(prev => Math.max(0, prev - 1))
+        }, 1000)
+        return () => clearInterval(interval)
+    }, [lockoutTimer])
+
     useEffect(() => {
         if (!gameContainer.current) return
 
@@ -174,6 +190,10 @@ export default function GamePage() {
                     .setInteractive()
 
                 this.imageBottom.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+                    // Check if player is currently banned
+                    const parent = (this.game as any).reactProps
+                    if (parent.lockoutRef.current > 0) return
+
                     const rect = this.imageBottom.getBounds()
                     const xPercent = ((pointer.x - rect.x) / rect.width) * 100
                     const yPercent = ((pointer.y - rect.y) / rect.height) * 100
@@ -188,12 +208,14 @@ export default function GamePage() {
             }
 
             checkDifference(xP: number, yP: number) {
+                let foundAny = false
                 for (const diff of this.currentDiffs) {
                     const dx = diff.x - xP
                     const dy = diff.y - yP
                     const distance = Math.sqrt(dx * dx + dy * dy)
 
                     if (distance <= diff.radius) {
+                        foundAny = true
                         if (socket) {
                             socket.emit('player_found_diff', {
                                 roomCode,
@@ -203,6 +225,21 @@ export default function GamePage() {
                         }
                         break
                     }
+                }
+
+                // Handle anti-spam logic
+                const parent = (this.game as any).reactProps
+                if (foundAny) {
+                    parent.setMissCount(0)
+                } else {
+                    parent.setMissCount((prev: number) => {
+                        const newCount = prev + 1
+                        if (newCount >= 3) {
+                            parent.setLockoutTimer(3)
+                            return 0 // Reset after trigger
+                        }
+                        return newCount
+                    })
                 }
             }
 
@@ -300,7 +337,10 @@ export default function GamePage() {
             scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }
         }
 
-        phaserGame.current = new Phaser.Game(config)
+        const game = new Phaser.Game(config)
+        phaserGame.current = game
+            ; (game as any).reactProps = { setMissCount, setLockoutTimer, lockoutRef }
+
         return () => {
             sceneReady.current = false
             phaserGame.current?.destroy(true)
@@ -343,6 +383,46 @@ export default function GamePage() {
             </div>
 
             <div ref={gameContainer} className="flex-1 bg-slate-950" />
+
+            {/* Anti-Spam Lockout Overlay */}
+            {lockoutTimer > 0 && (
+                <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center z-[100] animate-fade-in">
+                    <div className="text-center p-10 rounded-3xl bg-red-500/10 border-2 border-red-500/50 shadow-2xl shadow-red-500/20 max-w-sm">
+                        <div className="text-7xl mb-6 animate-bounce">🚫</div>
+                        <h2 className="text-3xl font-black text-white mb-2 uppercase tracking-tighter">Anti-Spam!</h2>
+                        <p className="text-red-400 font-bold mb-8">Stop clicking randomly. Wait for a moment.</p>
+
+                        <div className="relative w-24 h-24 mx-auto">
+                            <svg className="w-full h-full transform -rotate-90">
+                                <circle
+                                    className="text-white/10"
+                                    strokeWidth="8"
+                                    stroke="currentColor"
+                                    fill="transparent"
+                                    r="40"
+                                    cx="48"
+                                    cy="48"
+                                />
+                                <circle
+                                    className="text-red-500 transition-all duration-1000"
+                                    strokeWidth="8"
+                                    strokeDasharray={2 * Math.PI * 40}
+                                    strokeDashoffset={2 * Math.PI * 40 * (1 - lockoutTimer / 3)}
+                                    strokeLinecap="round"
+                                    stroke="currentColor"
+                                    fill="transparent"
+                                    r="40"
+                                    cx="48"
+                                    cy="48"
+                                />
+                            </svg>
+                            <span className="absolute inset-0 flex items-center justify-center text-4xl font-black text-white">
+                                {lockoutTimer}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="absolute bottom-6 left-6 right-6 flex items-center gap-3 overflow-x-auto custom-scrollbar z-50 pointer-events-none">
                 {scores.sort((a, b) => b.score - a.score).map((p, i) => (
