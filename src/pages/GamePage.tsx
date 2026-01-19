@@ -170,7 +170,7 @@ export default function GamePage() {
             private imageTop!: Phaser.GameObjects.Image
             private imageBottom!: Phaser.GameObjects.Image
             private currentDiffs: { id: string; x: number; y: number; radius: number }[] = []
-            private markers: Map<string, { graphics: Phaser.GameObjects.Graphics, text: Phaser.GameObjects.Text }> = new Map()
+            private markers: Map<string, { top: { g: Phaser.GameObjects.Graphics, t: Phaser.GameObjects.Text }, bot: { g: Phaser.GameObjects.Graphics, t: Phaser.GameObjects.Text } }> = new Map()
             private currentImageId: string = ''
 
             constructor() {
@@ -185,20 +185,22 @@ export default function GamePage() {
                 bg.fillStyle(0x020617, 1)
                 bg.fillRect(0, 0, width, height)
 
-                this.imageTop = this.add.image(width * 0.25, height / 2, '')
-                this.imageBottom = this.add.image(width * 0.75, height / 2, '')
-                    .setInteractive()
+                this.imageTop.setInteractive()
+                this.imageBottom.setInteractive()
 
-                this.imageBottom.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+                const handlePointerDown = (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.Image) => {
                     // Check if player is currently banned
                     const parent = (this.game as any).reactProps
                     if (parent.lockoutRef.current > 0) return
 
-                    const rect = this.imageBottom.getBounds()
+                    const rect = gameObject.getBounds()
                     const xPercent = ((pointer.x - rect.x) / rect.width) * 100
                     const yPercent = ((pointer.y - rect.y) / rect.height) * 100
                     this.checkDifference(xPercent, yPercent)
-                })
+                }
+
+                this.imageTop.on('pointerdown', (pointer: Phaser.Input.Pointer) => handlePointerDown(pointer, this.imageTop))
+                this.imageBottom.on('pointerdown', (pointer: Phaser.Input.Pointer) => handlePointerDown(pointer, this.imageBottom))
 
                 sceneReady.current = true
                 if (pendingImage.current) {
@@ -247,40 +249,49 @@ export default function GamePage() {
                 const diff = this.currentDiffs.find(d => d.id === diffId)
                 if (!diff || this.markers.has(diffId)) return
 
-                const rect = this.imageBottom.getBounds()
-                const x = rect.x + (diff.x / 100) * rect.width
-                const y = rect.y + (diff.y / 100) * rect.height
-                const radius = (diff.radius / 100) * rect.width
+                const createMarkerForImage = (img: Phaser.GameObjects.Image) => {
+                    const rect = img.getBounds()
+                    const x = rect.x + (diff.x / 100) * rect.width
+                    const y = rect.y + (diff.y / 100) * rect.height
+                    const radius = (diff.radius / 100) * rect.width
 
-                const graphics = this.add.graphics()
-                graphics.lineStyle(4, 0x10b981, 1)
-                graphics.strokeCircle(x, y, radius)
-                graphics.fillStyle(0x10b981, 0.2)
-                graphics.fillCircle(x, y, radius)
+                    const graphics = this.add.graphics()
+                    graphics.lineStyle(4, 0x10b981, 1)
+                    graphics.strokeCircle(x, y, radius)
+                    graphics.fillStyle(0x10b981, 0.2)
+                    graphics.fillCircle(x, y, radius)
 
-                const text = this.add.text(x, y - radius - 15, playerName, {
-                    fontSize: '12px',
-                    fontStyle: 'bold',
-                    color: '#10b981',
-                    backgroundColor: '#0f172aa0',
-                    padding: { x: 6, y: 3 }
-                }).setOrigin(0.5)
+                    const text = this.add.text(x, y - radius - 15, playerName, {
+                        fontSize: '12px',
+                        fontStyle: 'bold',
+                        color: '#10b981',
+                        backgroundColor: '#0f172aa0',
+                        padding: { x: 6, y: 3 }
+                    }).setOrigin(0.5)
 
-                this.markers.set(diffId, { graphics, text })
+                    this.tweens.add({
+                        targets: [graphics, text],
+                        alpha: { from: 0, to: 1 },
+                        scale: { from: 0.8, to: 1 },
+                        duration: 250,
+                        ease: 'Back.Out'
+                    })
 
-                this.tweens.add({
-                    targets: [graphics, text],
-                    alpha: { from: 0, to: 1 },
-                    scale: { from: 0.8, to: 1 },
-                    duration: 250,
-                    ease: 'Back.Out'
-                })
+                    return { g: graphics, t: text }
+                }
+
+                const markerTop = createMarkerForImage(this.imageTop)
+                const markerBot = createMarkerForImage(this.imageBottom)
+
+                this.markers.set(diffId, { top: markerTop, bot: markerBot })
             }
 
             loadNewImage(imageData: ImageData) {
                 this.markers.forEach(m => {
-                    m.graphics.destroy()
-                    m.text.destroy()
+                    m.top.g.destroy()
+                    m.top.t.destroy()
+                    m.bot.g.destroy()
+                    m.bot.t.destroy()
                 })
                 this.markers.clear()
                 this.currentDiffs = imageData.differences || []
