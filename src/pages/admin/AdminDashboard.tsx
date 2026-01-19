@@ -147,7 +147,8 @@ export default function AdminDashboard() {
     const clearPlayers = async (roomId: string) => {
         setIsCleaning(roomId)
         try {
-            const response = await fetch(`/api/rooms/${roomId}/players`, {
+            const apiUrl = import.meta.env.VITE_API_URL || ''
+            const response = await fetch(`${apiUrl}/api/rooms/${roomId}/players`, {
                 method: 'DELETE'
             })
 
@@ -165,7 +166,8 @@ export default function AdminDashboard() {
     const handleDeleteRoom = async () => {
         if (!roomToDelete) return
         try {
-            const response = await fetch(`/api/rooms/${roomToDelete}`, {
+            const apiUrl = import.meta.env.VITE_API_URL || ''
+            const response = await fetch(`${apiUrl}/api/rooms/${roomToDelete}`, {
                 method: 'DELETE'
             })
 
