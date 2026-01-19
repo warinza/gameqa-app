@@ -185,8 +185,8 @@ export default function GamePage() {
                 bg.fillStyle(0x020617, 1)
                 bg.fillRect(0, 0, width, height)
 
-                this.imageTop.setInteractive()
-                this.imageBottom.setInteractive()
+                this.imageTop = this.add.image(width * 0.25, height / 2, '').setInteractive()
+                this.imageBottom = this.add.image(width * 0.75, height / 2, '').setInteractive()
 
                 const handlePointerDown = (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.Image) => {
                     // Check if player is currently banned
