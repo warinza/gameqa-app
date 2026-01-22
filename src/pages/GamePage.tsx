@@ -172,6 +172,7 @@ export default function GamePage() {
             private currentDiffs: { id: string; x: number; y: number; radius: number }[] = []
             private markers: Map<string, { top: { g: Phaser.GameObjects.Graphics, t: Phaser.GameObjects.Text }, bot: { g: Phaser.GameObjects.Graphics, t: Phaser.GameObjects.Text } }> = new Map()
             private currentImageId: string = ''
+            private borderGraphics!: Phaser.GameObjects.Graphics
 
             constructor() {
                 super({ key: 'GameScene' })
@@ -307,10 +308,22 @@ export default function GamePage() {
                     const height = this.scale.height
                     const isPortrait = height > width
 
+                    // Clear previous borders if any (simple way: rely on scene redraw or store reference if needed, 
+                    // but since we don't store border ref, we can just redraw on top or clear graphics layer if we had a dedicated one.
+                    // For now, let's create a dedicated graphics object for borders if we want to be clean, 
+                    // but usually images are just resized. We'll add a border graphics object to the scene.)
+
+                    if (!this.borderGraphics) {
+                        this.borderGraphics = this.add.graphics();
+                    }
+                    this.borderGraphics.clear();
+
                     if (isPortrait) {
                         // Vertical stacking for mobile/portrait
-                        const maxWidth = width * 0.9
-                        const maxHeight = height * 0.4 // Each image takes ~40% height
+                        // Maximize width usage (98% width)
+                        // Maximize height usage (Each image takes nearly 50% height with tiny gap)
+                        const maxWidth = width * 0.98
+                        const maxHeight = height * 0.495
 
                         // Use original image to determine scale for both to keep them identical
                         const ratio = Math.min(maxWidth / this.imageTop.width, maxHeight / this.imageTop.height)
@@ -318,12 +331,15 @@ export default function GamePage() {
                         this.imageTop.setScale(ratio)
                         this.imageBottom.setScale(ratio)
 
+                        // Tight stacking
+                        // Top image centered in top half
                         this.imageTop.setPosition(width * 0.5, height * 0.25)
-                        this.imageBottom.setPosition(width * 0.5, height * 0.7)
+                        // Bottom image centered in bottom half
+                        this.imageBottom.setPosition(width * 0.5, height * 0.75)
                     } else {
                         // Side by side side calculation for landscape/desktop
                         const maxWidth = width * 0.48
-                        const maxHeight = height * 0.85
+                        const maxHeight = height * 0.95
 
                         const ratio = Math.min(maxWidth / this.imageTop.width, maxHeight / this.imageTop.height)
 
@@ -333,6 +349,17 @@ export default function GamePage() {
                         this.imageTop.setPosition(width * 0.25, height * 0.5)
                         this.imageBottom.setPosition(width * 0.75, height * 0.5)
                     }
+
+                    // Draw Borders
+                    const drawBorder = (img: Phaser.GameObjects.Image, color: number = 0xffffff) => {
+                        const bounds = img.getBounds();
+                        this.borderGraphics.lineStyle(4, color, 1);
+                        this.borderGraphics.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+                    }
+
+                    drawBorder(this.imageTop);
+                    drawBorder(this.imageBottom);
+
                 })
                 this.load.start()
             }

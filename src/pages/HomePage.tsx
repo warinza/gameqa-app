@@ -1,6 +1,8 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 export default function HomePage() {
+    const navigate = useNavigate()
+
     return (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
             {/* Decorative Elements */}
@@ -42,13 +44,28 @@ export default function HomePage() {
 
                     <form
                         className="flex gap-2"
-                        onSubmit={(e) => {
+                        onSubmit={async (e) => {
                             e.preventDefault()
-                            const code = (e.target as HTMLFormElement).code.value.toUpperCase()
-                            if (code) {
-                                window.location.href = `/join/${code}`
+                            const form = e.target as HTMLFormElement
+                            const codeInput = form.code as HTMLInputElement
+                            const baseCode = codeInput.value
+                            const code = baseCode ? baseCode.toUpperCase().trim() : ''
+
+                            if (!code) return
+
+                            try {
+                                const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/rooms/${code}`)
+                                if (res.ok) {
+                                    navigate(`/join/${code}`)
+                                } else {
+                                    alert('ไม่พบห้องนี้ในระบบ / Room not found')
+                                }
+                            } catch (err) {
+                                console.error(err)
+                                alert('เกิดข้อผิดพลาดในการเชื่อมต่อ / Connection error')
                             }
                         }}
+
                     >
                         <input
                             type="text"
