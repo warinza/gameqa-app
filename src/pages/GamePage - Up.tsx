@@ -310,12 +310,6 @@ export default function GamePage() {
                     this.imageTop.setTexture(`top_${imageData.id}`);
                     this.imageBottom.setTexture(`bot_${imageData.id}`);
 
-
-                    // หลังจาก setTexture เรียบร้อย
-                    this.textures.get(`top_${imageData.id}`).setFilter(Phaser.Textures.FilterMode.NEAREST);
-                    this.textures.get(`bot_${imageData.id}`).setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-
                     const width = this.scale.width;
                     const height = this.scale.height;
                     const isPortrait = height > width;
@@ -409,21 +403,12 @@ export default function GamePage() {
                 // ✅ ปัดพิกเซลให้ลงพิกัดเต็มเพื่อลด subpixel blur
                 roundPixels: true
             },
-
-            // ใช้ DPR ของเครื่องจริง ๆ และหนีบเพดานไว้เพื่อสมดุลประสิทธิภาพ
-            resolution: Math.min(window.devicePixelRatio || 1, 3)
-
+            // คงไว้เพื่อรองรับจอ DPI สูง (ดีอยู่แล้ว)
+            resolution: window.devicePixelRatio || 1
         };
 
 
         const game = new Phaser.Game(config)
-
-        // ย้ำการเรนเดอร์ของ <canvas> ด้าน CSS ให้เน้นพิกเซล
-        const canvas = game.canvas;
-        if (canvas) {
-            // บางเบราว์เซอร์ WebGL จะสนใจค่า CSS นี้ด้วย
-            (canvas.style as any).imageRendering = 'pixelated'; // หรือ 'crisp-edges' ตามเบราว์เซอร์
-        }
         phaserGame.current = game
             ; (game as any).reactProps = { setMissCount, setLockoutTimer, lockoutRef }
 
