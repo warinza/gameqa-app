@@ -287,83 +287,105 @@ export default function GamePage() {
                 this.markers.set(diffId, { top: markerTop, bot: markerBot })
             }
 
+
             loadNewImage(imageData: ImageData) {
+                // 1) เคลียร์ marker เดิม
                 this.markers.forEach(m => {
-                    m.top.g.destroy()
-                    m.top.t.destroy()
-                    m.bot.g.destroy()
-                    m.bot.t.destroy()
-                })
-                this.markers.clear()
-                this.currentDiffs = imageData.differences || []
-                this.currentImageId = imageData.id
+                    m.top.g.destroy();
+                    m.top.t.destroy();
+                    m.bot.g.destroy();
+                    m.bot.t.destroy();
+                });
+                this.markers.clear();
 
-                this.load.image(`top_${imageData.id}`, imageData.original_url)
-                this.load.image(`bot_${imageData.id}`, imageData.modified_url || imageData.original_url)
+                // 2) เซ็ตสถานะรูป
+                this.currentDiffs = imageData.differences || [];
+                this.currentImageId = imageData.id;
+
+                // 3) โหลด texture
+                this.load.image(`top_${imageData.id}`, imageData.original_url);
+                this.load.image(`bot_${imageData.id}`, imageData.modified_url || imageData.original_url);
+
                 this.load.once('complete', () => {
-                    this.imageTop.setTexture(`top_${imageData.id}`)
-                    this.imageBottom.setTexture(`bot_${imageData.id}`)
+                    this.imageTop.setTexture(`top_${imageData.id}`);
+                    this.imageBottom.setTexture(`bot_${imageData.id}`);
 
-                    const width = this.scale.width
-                    const height = this.scale.height
-                    const isPortrait = height > width
+                    const width = this.scale.width;
+                    const height = this.scale.height;
+                    const isPortrait = height > width;
 
-                    // Clear previous borders if any (simple way: rely on scene redraw or store reference if needed, 
-                    // but since we don't store border ref, we can just redraw on top or clear graphics layer if we had a dedicated one.
-                    // For now, let's create a dedicated graphics object for borders if we want to be clean, 
-                    // but usually images are just resized. We'll add a border graphics object to the scene.)
-
+                    // เตรียม graphics สำหรับกรอบ
                     if (!this.borderGraphics) {
                         this.borderGraphics = this.add.graphics();
                     }
                     this.borderGraphics.clear();
 
+                    // --- คำนวณสเกลแบบ "ไม่ upscale" ---
+                    // หมายเหตุ: ใช้ขนาด "native" ของ texture จากตัว imageTop
+                    const nativeW = this.imageTop.width;
+                    const nativeH = this.imageTop.height;
+
+                    let maxW: number, maxH: number;
+
                     if (isPortrait) {
-                        // Vertical stacking for mobile/portrait
-                        // Maximize width usage (98% width)
-                        // Maximize height usage (Each image takes nearly 50% height with tiny gap)
-                        const maxWidth = width * 0.98
-                        const maxHeight = height * 0.495
-
-                        // Use original image to determine scale for both to keep them identical
-                        const ratio = Math.min(maxWidth / this.imageTop.width, maxHeight / this.imageTop.height)
-
-                        this.imageTop.setScale(ratio)
-                        this.imageBottom.setScale(ratio)
-
-                        // Tight stacking
-                        // Top image centered in top half
-                        this.imageTop.setPosition(width * 0.5, height * 0.25)
-                        // Bottom image centered in bottom half
-                        this.imageBottom.setPosition(width * 0.5, height * 0.75)
+                        // วางบน-ล่าง
+                        maxW = width * 0.98;
+                        maxH = height * 0.495;
                     } else {
-                        // Side by side side calculation for landscape/desktop
-                        const maxWidth = width * 0.48
-                        const maxHeight = height * 0.95
-
-                        const ratio = Math.min(maxWidth / this.imageTop.width, maxHeight / this.imageTop.height)
-
-                        this.imageTop.setScale(ratio)
-                        this.imageBottom.setScale(ratio)
-
-                        this.imageTop.setPosition(width * 0.25, height * 0.5)
-                        this.imageBottom.setPosition(width * 0.75, height * 0.5)
+                        // วางซ้าย-ขวา
+                        maxW = width * 0.48;
+                        maxH = height * 0.95;
                     }
 
-                    // Draw Borders
+                    // อัตราส่วนเพื่อให้พอดีกับกล่องวาง
+                    const fitRatio = Math.min(maxW / nativeW, maxH / nativeH);
+
+                    // ✅ ป้องกัน upscale: หนีบค่าไม่เกิน 1 เสมอ
+                    const ratio = Math.min(1, fitRatio);
+
+                    this.imageTop.setScale(ratio);
+                    this.imageBottom.setScale(ratio);
+
+                    // จัดตำแหน่ง
+                    if (isPortrait) {
+                        this.imageTop.setPosition(width * 0.5, height * 0.25);
+                        this.imageBottom.setPosition(width * 0.5, height * 0.75);
+                    } else {
+                        this.imageTop.setPosition(width * 0.25, height * 0.5);
+                        this.imageBottom.setPosition(width * 0.75, height * 0.5);
+                    }
+
+                    // วาดกรอบ
                     const drawBorder = (img: Phaser.GameObjects.Image, color: number = 0xffffff) => {
                         const bounds = img.getBounds();
                         this.borderGraphics.lineStyle(4, color, 1);
                         this.borderGraphics.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
-                    }
-
+                    };
                     drawBorder(this.imageTop);
                     drawBorder(this.imageBottom);
+                });
 
-                })
-                this.load.start()
+                this.load.start();
             }
+
         }
+
+        // const config: any = {
+        //     type: Phaser.AUTO,
+        //     parent: gameContainer.current,
+        //     width: window.innerWidth,
+        //     height: window.innerHeight * 0.82,
+        //     backgroundColor: '#020617',
+        //     scene: GameScene,
+        //     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+        //     render: {
+        //         antialias: true, // Smooths edges
+        //         roundPixels: false, // Allows sub-pixel positioning
+        //         pixelArt: false // Ensure we are NOT in pixel art mode
+        //     },
+        //       resolution: window.devicePixelRatio || 1 // Handle High DPI / Retina
+
+        // }
 
         const config: any = {
             type: Phaser.AUTO,
@@ -374,12 +396,17 @@ export default function GamePage() {
             scene: GameScene,
             scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
             render: {
-                antialias: true, // Smooths edges
-                roundPixels: false, // Allows sub-pixel positioning
-                pixelArt: false // Ensure we are NOT in pixel art mode
+                // ❌ ปิด antialias เพื่อไม่ให้ภาพนุ่มเกินไป
+                antialias: false,
+                // ✅ เปิด pixelArt เพื่อตั้งค่า texture filter เป็น NEAREST โดยรวม (คม)
+                pixelArt: true,
+                // ✅ ปัดพิกเซลให้ลงพิกัดเต็มเพื่อลด subpixel blur
+                roundPixels: true
             },
-            resolution: window.devicePixelRatio || 1 // Handle High DPI / Retina
-        }
+            // คงไว้เพื่อรองรับจอ DPI สูง (ดีอยู่แล้ว)
+            resolution: window.devicePixelRatio || 1
+        };
+
 
         const game = new Phaser.Game(config)
         phaserGame.current = game
