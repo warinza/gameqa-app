@@ -365,14 +365,20 @@ export default function GamePage() {
             }
         }
 
-        const config: Phaser.Types.Core.GameConfig = {
+        const config: any = {
             type: Phaser.AUTO,
             parent: gameContainer.current,
             width: window.innerWidth,
             height: window.innerHeight * 0.82,
             backgroundColor: '#020617',
             scene: GameScene,
-            scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }
+            scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+            render: {
+                antialias: true, // Smooths edges
+                roundPixels: false, // Allows sub-pixel positioning
+                pixelArt: false // Ensure we are NOT in pixel art mode
+            },
+            resolution: window.devicePixelRatio || 1 // Handle High DPI / Retina
         }
 
         const game = new Phaser.Game(config)
