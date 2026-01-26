@@ -311,9 +311,9 @@ export default function GamePage() {
                     this.imageBottom.setTexture(`bot_${imageData.id}`);
 
 
-                    // หลังจาก setTexture เรียบร้อย
-                    this.textures.get(`top_${imageData.id}`).setFilter(Phaser.Textures.FilterMode.NEAREST);
-                    this.textures.get(`bot_${imageData.id}`).setFilter(Phaser.Textures.FilterMode.NEAREST);
+                    // หลังจาก setTexture เรียบร้อย - ใช้ LINEAR filter เพื่อความคมชัด
+                    this.textures.get(`top_${imageData.id}`).setFilter(Phaser.Textures.FilterMode.LINEAR);
+                    this.textures.get(`bot_${imageData.id}`).setFilter(Phaser.Textures.FilterMode.LINEAR);
 
 
                     const width = this.scale.width;
@@ -393,36 +393,44 @@ export default function GamePage() {
 
         // }
 
+        // ✅ Maximum Quality Config - เพื่อให้ภาพคมชัดเท่า HTML img tag
+        const dpr = window.devicePixelRatio || 1;
+        const gameWidth = window.innerWidth;
+        const gameHeight = window.innerHeight * 0.82;
+
         const config: any = {
-            type: Phaser.AUTO,
+            type: Phaser.WEBGL,  // ⚡ Force WebGL for best quality
             parent: gameContainer.current,
-            width: window.innerWidth,
-            height: window.innerHeight * 0.82,
+            width: gameWidth * dpr,   // 📐 Native DPI resolution
+            height: gameHeight * dpr,
             backgroundColor: '#020617',
             scene: GameScene,
-            scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-            render: {
-                // ❌ ปิด antialias เพื่อไม่ให้ภาพนุ่มเกินไป
-                antialias: false,
-                // ✅ เปิด pixelArt เพื่อตั้งค่า texture filter เป็น NEAREST โดยรวม (คม)
-                pixelArt: true,
-                // ✅ ปัดพิกเซลให้ลงพิกัดเต็มเพื่อลด subpixel blur
-                roundPixels: true
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH,
+                width: gameWidth * dpr,
+                height: gameHeight * dpr
             },
-
-            // ใช้ DPR ของเครื่องจริง ๆ และหนีบเพดานไว้เพื่อสมดุลประสิทธิภาพ
-            resolution: Math.min(window.devicePixelRatio || 1, 3)
-
+            render: {
+                antialias: true,           // ✅ Smooth edges
+                antialiasGL: true,         // 🔧 WebGL-specific antialiasing
+                pixelArt: false,           // ❌ Disable pixel art mode
+                roundPixels: false,        // ❌ Allow sub-pixel positioning
+                desynchronized: true,      // 🚀 Better performance
+                powerPreference: 'high-performance',
+                mipmapFilter: 'LINEAR_MIPMAP_LINEAR'  // 🖼️ Best texture filtering
+            },
+            banner: false
         };
 
+        const game = new Phaser.Game(config);
 
-        const game = new Phaser.Game(config)
-
-        // ย้ำการเรนเดอร์ของ <canvas> ด้าน CSS ให้เน้นพิกเซล
+        // ✅ Ensure canvas uses smooth rendering
         const canvas = game.canvas;
         if (canvas) {
-            // บางเบราว์เซอร์ WebGL จะสนใจค่า CSS นี้ด้วย
-            (canvas.style as any).imageRendering = 'pixelated'; // หรือ 'crisp-edges' ตามเบราว์เซอร์
+            canvas.style.imageRendering = 'auto';  // Smooth rendering
+            canvas.style.width = `${gameWidth}px`;
+            canvas.style.height = `${gameHeight}px`;
         }
         phaserGame.current = game
             ; (game as any).reactProps = { setMissCount, setLockoutTimer, lockoutRef }

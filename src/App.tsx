@@ -5,6 +5,7 @@ import JoinPage from './pages/JoinPage'
 import LobbyPage from './pages/LobbyPage'
 import GamePage from './pages/GamePage'
 import ResultPage from './pages/ResultPage'
+import TestPhaserPage from './pages/TestPhaserPage'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminCreateRoom from './pages/admin/AdminCreateRoom'
 import AdminEditImage from './pages/admin/AdminEditImage'
@@ -26,6 +27,7 @@ function App() {
                 <Route path="/lobby/:roomCode" element={<LobbyPage />} />
                 <Route path="/game/:roomCode" element={<GamePage />} />
                 <Route path="/result/:roomCode" element={<ResultPage />} />
+                <Route path="/test-phaser" element={<TestPhaserPage />} />
 
                 {/* Admin Routes */}
                 <Route path="/admin/login" element={<AdminLogin />} />
