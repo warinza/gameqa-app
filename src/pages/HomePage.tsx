@@ -80,7 +80,7 @@ export default function HomePage() {
                     </form>
                 </div>
 
-                <p className="text-slate-600 text-xs mt-8">
+                <p className="text-blue-600 text-xl mt-8">
                     Made with ❤️ for fun  by <span className="text-indigo-400">Watchara@TST-IS 2026</span>
                 </p>
             </div>
