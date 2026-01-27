@@ -85,8 +85,12 @@ export default function GamePage() {
             if (data.status === 'PLAYING' && data.imageQueue[data.currentImageIdx]) {
                 const img = data.imageQueue[data.currentImageIdx]
                 setTotalPoints(img.differences?.length || 0)
-                // We'd ideally need the found count from the server here, 
-                // but for now, we'll reset it or let diff_found sync it.
+
+                // Update Phaser props with image queue
+                if (phaserGame.current) {
+                    (phaserGame.current as any).reactProps.imageQueue = data.imageQueue;
+                }
+
                 if (sceneReady.current) {
                     const scene = phaserGame.current?.scene.getScene('GameScene') as any
                     scene?.loadNewImage(img)
@@ -173,6 +177,15 @@ export default function GamePage() {
             private markers: Map<string, { top: { g: Phaser.GameObjects.Graphics, t: Phaser.GameObjects.Text }, bot: { g: Phaser.GameObjects.Graphics, t: Phaser.GameObjects.Text } }> = new Map()
             private currentImageId: string = ''
             private borderGraphics!: Phaser.GameObjects.Graphics
+            // Loading spinners
+            private loadingSpinnerTop!: Phaser.GameObjects.Graphics
+            private loadingSpinnerBot!: Phaser.GameObjects.Graphics
+            private loadingTextTop!: Phaser.GameObjects.Text
+            private loadingTextBot!: Phaser.GameObjects.Text
+            private spinnerAngle: number = 0
+            private isLoading: boolean = false
+            // Image queue for prefetch
+            private imageQueue: ImageData[] = []
 
             constructor() {
                 super({ key: 'GameScene' })
@@ -186,13 +199,26 @@ export default function GamePage() {
                 bg.fillStyle(0x020617, 1)
                 bg.fillRect(0, 0, width, height)
 
-                this.imageTop = this.add.image(width * 0.25, height / 2, '').setInteractive()
-                this.imageBottom = this.add.image(width * 0.75, height / 2, '').setInteractive()
+                // Initialize images (hidden initially)
+                this.imageTop = this.add.image(width * 0.25, height / 2, '').setInteractive().setVisible(false)
+                this.imageBottom = this.add.image(width * 0.75, height / 2, '').setInteractive().setVisible(false)
+
+                // Initialize Loading Spinners
+                this.createLoadingUI(width, height)
+
+                // Spinner rotation loop
+                this.events.on('update', () => {
+                    if (this.isLoading) {
+                        this.spinnerAngle += 4
+                        this.loadingSpinnerTop.setAngle(this.spinnerAngle)
+                        this.loadingSpinnerBot.setAngle(this.spinnerAngle)
+                    }
+                })
 
                 const handlePointerDown = (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.Image) => {
                     // Check if player is currently banned
                     const parent = (this.game as any).reactProps
-                    if (parent.lockoutRef.current > 0) return
+                    if (parent && parent.lockoutRef && parent.lockoutRef.current > 0) return
 
                     const rect = gameObject.getBounds()
                     const xPercent = ((pointer.x - rect.x) / rect.width) * 100
@@ -204,9 +230,63 @@ export default function GamePage() {
                 this.imageBottom.on('pointerdown', (pointer: Phaser.Input.Pointer) => handlePointerDown(pointer, this.imageBottom))
 
                 sceneReady.current = true
+
+                // Get imageQueue from react props
+                const parent = (this.game as any).reactProps;
+                if (parent && parent.imageQueue) {
+                    this.imageQueue = parent.imageQueue;
+                }
+
                 if (pendingImage.current) {
                     this.loadNewImage(pendingImage.current)
                     pendingImage.current = null
+                }
+            }
+
+            createLoadingUI(width: number, height: number) {
+                const isPortrait = height > width
+                const topX = isPortrait ? width * 0.5 : width * 0.25
+                const topY = isPortrait ? height * 0.25 : height * 0.5
+                const botX = isPortrait ? width * 0.5 : width * 0.75
+                const botY = isPortrait ? height * 0.75 : height * 0.5
+
+                const createSpinner = (x: number, y: number) => {
+                    const g = this.add.graphics()
+                    g.lineStyle(4, 0x6366f1, 1)
+                    g.beginPath()
+                    g.arc(0, 0, 24, Phaser.Math.DegToRad(0), Phaser.Math.DegToRad(270), false)
+                    g.strokePath()
+                    g.x = x
+                    g.y = y
+                    g.setVisible(false)
+                    return g
+                }
+
+                const createText = (x: number, y: number) => {
+                    return this.add.text(x, y + 40, 'LOADING...', {
+                        fontSize: '14px',
+                        fontFamily: 'Inter',
+                        fontStyle: 'bold',
+                        color: '#6366f1'
+                    }).setOrigin(0.5).setVisible(false)
+                }
+
+                this.loadingSpinnerTop = createSpinner(topX, topY)
+                this.loadingSpinnerBot = createSpinner(botX, botY)
+                this.loadingTextTop = createText(topX, topY)
+                this.loadingTextBot = createText(botX, botY)
+            }
+
+            setLoading(loading: boolean) {
+                this.isLoading = loading
+                this.loadingSpinnerTop.setVisible(loading)
+                this.loadingSpinnerBot.setVisible(loading)
+                this.loadingTextTop.setVisible(loading)
+                this.loadingTextBot.setVisible(loading)
+
+                if (loading) {
+                    this.imageTop.setVisible(false)
+                    this.imageBottom.setVisible(false)
                 }
             }
 
@@ -232,17 +312,19 @@ export default function GamePage() {
 
                 // Handle anti-spam logic
                 const parent = (this.game as any).reactProps
-                if (foundAny) {
-                    parent.setMissCount(0)
-                } else {
-                    parent.setMissCount((prev: number) => {
-                        const newCount = prev + 1
-                        if (newCount >= 3) {
-                            parent.setLockoutTimer(3)
-                            return 0 // Reset after trigger
-                        }
-                        return newCount
-                    })
+                if (parent && parent.setMissCount) {
+                    if (foundAny) {
+                        parent.setMissCount(0)
+                    } else {
+                        parent.setMissCount((prev: number) => {
+                            const newCount = prev + 1
+                            if (newCount >= 3) {
+                                if (parent.setLockoutTimer) parent.setLockoutTimer(3)
+                                return 0 // Reset after trigger
+                            }
+                            return newCount
+                        })
+                    }
                 }
             }
 
@@ -287,7 +369,6 @@ export default function GamePage() {
                 this.markers.set(diffId, { top: markerTop, bot: markerBot })
             }
 
-
             loadNewImage(imageData: ImageData) {
                 // 1) เคลียร์ marker เดิม
                 this.markers.forEach(m => {
@@ -302,78 +383,151 @@ export default function GamePage() {
                 this.currentDiffs = imageData.differences || [];
                 this.currentImageId = imageData.id;
 
-                // 3) โหลด texture
-                this.load.image(`top_${imageData.id}`, imageData.original_url);
-                this.load.image(`bot_${imageData.id}`, imageData.modified_url || imageData.original_url);
+                // 3) เริ่มโหลด (Show Spinner)
+                this.setLoading(true);
 
-                this.load.once('complete', () => {
-                    this.imageTop.setTexture(`top_${imageData.id}`);
-                    this.imageBottom.setTexture(`bot_${imageData.id}`);
+                // โหลด texture ใหม่
+                const topKey = `top_${imageData.id}`;
+                const botKey = `bot_${imageData.id}`;
 
-
-                    // หลังจาก setTexture เรียบร้อย - ใช้ LINEAR filter เพื่อความคมชัด
-                    this.textures.get(`top_${imageData.id}`).setFilter(Phaser.Textures.FilterMode.LINEAR);
-                    this.textures.get(`bot_${imageData.id}`).setFilter(Phaser.Textures.FilterMode.LINEAR);
-
-
-                    const width = this.scale.width;
-                    const height = this.scale.height;
-                    const isPortrait = height > width;
-
-                    // เตรียม graphics สำหรับกรอบ
-                    if (!this.borderGraphics) {
-                        this.borderGraphics = this.add.graphics();
+                // Check texture exists
+                let loadCount = 0;
+                const checkComplete = () => {
+                    loadCount++;
+                    if (loadCount >= 2) {
+                        this.onImageLoaded(imageData, topKey, botKey);
                     }
-                    this.borderGraphics.clear();
+                };
 
-                    // --- คำนวณสเกลแบบ "ไม่ upscale" ---
-                    // หมายเหตุ: ใช้ขนาด "native" ของ texture จากตัว imageTop
-                    const nativeW = this.imageTop.width;
-                    const nativeH = this.imageTop.height;
+                let needsLoadTop = false;
+                let needsLoadBot = false;
 
-                    let maxW: number, maxH: number;
+                if (!this.textures.exists(topKey)) {
+                    this.load.image(topKey, imageData.original_url);
+                    this.load.once(`filecomplete-image-${topKey}`, checkComplete);
+                    needsLoadTop = true;
+                } else {
+                    loadCount++;
+                }
 
-                    if (isPortrait) {
-                        // วางบน-ล่าง
-                        maxW = width * 0.98;
-                        maxH = height * 0.495;
-                    } else {
-                        // วางซ้าย-ขวา
-                        maxW = width * 0.48;
-                        maxH = height * 0.95;
-                    }
+                if (!this.textures.exists(botKey)) {
+                    this.load.image(botKey, imageData.modified_url || imageData.original_url);
+                    this.load.once(`filecomplete-image-${botKey}`, checkComplete);
+                    needsLoadBot = true;
+                } else {
+                    loadCount++;
+                }
 
-                    // อัตราส่วนเพื่อให้พอดีกับกล่องวาง
-                    const fitRatio = Math.min(maxW / nativeW, maxH / nativeH);
-
-                    // ✅ ป้องกัน upscale: หนีบค่าไม่เกิน 1 เสมอ
-                    const ratio = Math.min(1, fitRatio);
-
-                    this.imageTop.setScale(ratio);
-                    this.imageBottom.setScale(ratio);
-
-                    // จัดตำแหน่ง
-                    if (isPortrait) {
-                        this.imageTop.setPosition(width * 0.5, height * 0.25);
-                        this.imageBottom.setPosition(width * 0.5, height * 0.75);
-                    } else {
-                        this.imageTop.setPosition(width * 0.25, height * 0.5);
-                        this.imageBottom.setPosition(width * 0.75, height * 0.5);
-                    }
-
-                    // วาดกรอบ
-                    const drawBorder = (img: Phaser.GameObjects.Image, color: number = 0xffffff) => {
-                        const bounds = img.getBounds();
-                        this.borderGraphics.lineStyle(4, color, 1);
-                        this.borderGraphics.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
-                    };
-                    drawBorder(this.imageTop);
-                    drawBorder(this.imageBottom);
-                });
-
-                this.load.start();
+                if (loadCount >= 2) {
+                    this.onImageLoaded(imageData, topKey, botKey);
+                } else if (needsLoadTop || needsLoadBot) {
+                    this.load.start();
+                }
             }
 
+            onImageLoaded(imageData: ImageData, topKey: string, botKey: string) {
+                this.setLoading(false);
+                this.imageTop.setVisible(true);
+                this.imageBottom.setVisible(true);
+
+                this.imageTop.setTexture(topKey);
+                this.imageBottom.setTexture(botKey);
+
+                // หลังจาก setTexture เรียบร้อย - ใช้ LINEAR filter เพื่อความคมชัด
+                this.textures.get(topKey).setFilter(Phaser.Textures.FilterMode.LINEAR);
+                this.textures.get(botKey).setFilter(Phaser.Textures.FilterMode.LINEAR);
+
+                const width = this.scale.width;
+                const height = this.scale.height;
+                const isPortrait = height > width;
+
+                // เตรียม graphics สำหรับกรอบ
+                if (!this.borderGraphics) {
+                    this.borderGraphics = this.add.graphics();
+                }
+                this.borderGraphics.clear();
+
+                // --- คำนวณสเกลแบบ "ไม่ upscale" ---
+                const nativeW = this.imageTop.width;
+                const nativeH = this.imageTop.height;
+
+                let maxW: number, maxH: number;
+
+                if (isPortrait) {
+                    // วางบน-ล่าง
+                    maxW = width * 0.98;
+                    maxH = height * 0.495;
+                } else {
+                    // วางซ้าย-ขวา
+                    maxW = width * 0.48;
+                    maxH = height * 0.95;
+                }
+
+                // อัตราส่วนเพื่อให้พอดีกับกล่องวาง
+                const fitRatio = Math.min(maxW / nativeW, maxH / nativeH);
+
+                // ✅ ป้องกัน upscale: หนีบค่าไม่เกิน 1 เสมอ
+                const ratio = Math.min(1, fitRatio);
+
+                this.imageTop.setScale(ratio);
+                this.imageBottom.setScale(ratio);
+
+                // จัดตำแหน่ง
+                if (isPortrait) {
+                    this.imageTop.setPosition(width * 0.5, height * 0.25);
+                    this.imageBottom.setPosition(width * 0.5, height * 0.75);
+                } else {
+                    this.imageTop.setPosition(width * 0.25, height * 0.5);
+                    this.imageBottom.setPosition(width * 0.75, height * 0.5);
+                }
+
+                // วาดกรอบ
+                this.drawBorder(this.imageTop);
+                this.drawBorder(this.imageBottom);
+
+                // --- Progressive Loading (Prefetch Next) ---
+                this.prefetchNextImage(imageData.id);
+            }
+
+            drawBorder(img: Phaser.GameObjects.Image, color: number = 0xffffff) {
+                const bounds = img.getBounds();
+                this.borderGraphics.lineStyle(4, color, 1);
+                this.borderGraphics.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+            }
+
+            prefetchNextImage(currentId: string) {
+                // Refresh queue from props to ensure we have the latest data
+                const parent = (this.game as any).reactProps;
+                if (parent && parent.imageQueue) {
+                    this.imageQueue = parent.imageQueue;
+                }
+
+                // Find current index
+                if (!this.imageQueue || this.imageQueue.length === 0) return;
+
+                const queue = this.imageQueue;
+                const currentIdx = queue.findIndex(img => img.id === currentId);
+
+                if (currentIdx !== -1 && currentIdx + 1 < queue.length) {
+                    const nextImg = queue[currentIdx + 1];
+                    const topKey = `top_${nextImg.id}`;
+                    const botKey = `bot_${nextImg.id}`;
+
+                    let needsLoad = false;
+                    if (!this.textures.exists(topKey)) {
+                        this.load.image(topKey, nextImg.original_url);
+                        needsLoad = true;
+                    }
+                    if (!this.textures.exists(botKey)) {
+                        this.load.image(botKey, nextImg.modified_url || nextImg.original_url);
+                        needsLoad = true;
+                    }
+
+                    if (needsLoad) {
+                        this.load.start();
+                    }
+                }
+            }
         }
 
         // const config: any = {
@@ -433,8 +587,16 @@ export default function GamePage() {
             canvas.style.height = `${gameHeight}px`;
         }
         phaserGame.current = game
-            ; (game as any).reactProps = { setMissCount, setLockoutTimer, lockoutRef }
+            ; (game as any).reactProps = {
+                setMissCount,
+                setLockoutTimer,
+                lockoutRef,
+                // Pass image queue for prefetching logic inside Phaser
+                imageQueue: null // Will be updated we need to find a way to access roomState.imageQueue if it was available here. 
+                // Since this component uses `socket.on` to get state, let's update it in the useEffect hook below where we have access
+            }
 
+        // Hacky way to update props later but for now we need queue reference
         return () => {
             sceneReady.current = false
             phaserGame.current?.destroy(true)
